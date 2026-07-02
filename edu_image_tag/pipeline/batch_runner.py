@@ -25,6 +25,9 @@ class BatchRunner:
         out_dir = Path(config.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         state_path = out_dir / "batch_state.json"
+        if force:
+            # Forced run: discard any saved job so we resubmit from scratch.
+            state_path.unlink(missing_ok=True)
         state = json.loads(state_path.read_text()) if state_path.exists() else {}
 
         # Cache each image's bytes so load_bytes() fires exactly once per image

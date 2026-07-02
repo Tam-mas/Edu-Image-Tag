@@ -131,3 +131,13 @@ def test_bytes_loaded_once_per_image_with_classification(tmp_path):
                       writers=[_RecordingWriter()], context_lookup=ContextLookup({}),
                       force=False, dry_run=False)
     assert counts["n"] == 1  # loaded once, reused for classify + encode
+
+
+def test_force_clears_prior_batch_state(tmp_path):
+    cfg = _Cfg(); cfg.output_dir = str(tmp_path)
+    (tmp_path / "batch_state.json").write_text(json.dumps({"describe_job": "batches/old"}))
+    client = _fake_client([_payload("a.jpg", 0.9)])
+    BatchRunner().run(refs=[_ref("a.jpg")], client=client, config=cfg,
+                      writers=[_RecordingWriter()], context_lookup=ContextLookup({}),
+                      force=True, dry_run=False)
+    client.submit_batch.assert_called_once()  # ignored the saved job, resubmitted
