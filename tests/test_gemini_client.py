@@ -40,6 +40,25 @@ def test_describe_returns_parsed_schema():
     assert out.confidence_score == 0.8
 
 
+def test_classify_empty_image_types_raises():
+    import pytest
+    sdk = _fake_sdk(text="x")
+    client = GeminiClient(sdk_client=sdk, classify_model="c", describe_model="d")
+    with pytest.raises(ValueError):
+        client.classify(b"img", "image/jpeg", [])
+
+
+def test_describe_falls_back_to_json_text_when_parsed_is_none():
+    sdk = _fake_sdk(parsed=None, text=(
+        '{"image_type": "chart_graph", "short_alt_text": "s",'
+        ' "long_description": "l", "key_takeaways": [], "confidence_score": 0.5}'
+    ))
+    client = GeminiClient(sdk_client=sdk, classify_model="c", describe_model="d")
+    out = client.describe(b"img", "image/jpeg", "chart_graph", "")
+    assert out.image_type == "chart_graph"
+    assert out.confidence_score == 0.5
+
+
 def test_describe_retries_then_raises_on_persistent_failure():
     import pytest
     sdk = MagicMock()

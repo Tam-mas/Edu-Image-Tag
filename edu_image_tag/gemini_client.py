@@ -55,6 +55,8 @@ class GeminiClient:
 
     def classify(self, image_bytes: bytes, mime_type: str,
                  image_types: list[str]) -> str:
+        if not image_types:
+            raise ValueError("classify() requires a non-empty image_types list")
         prompt = (
             "Categorize this image into exactly one of these strings: "
             + ", ".join(image_types) + ". Reply with only the string."
