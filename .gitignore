@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Secrets & local
+.env
+.env.*
+
+# Tool outputs
+output/
+*.jsonl.tmp
+
+# Process/planning artifacts — NEVER pushed to the public repo
+docs/superpowers/
