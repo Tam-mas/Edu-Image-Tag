@@ -99,3 +99,35 @@ def test_failed_job_raises_and_clears_state(tmp_path):
                           force=False, dry_run=False)
     client.download_batch_results.assert_not_called()
     assert not (tmp_path / "batch_state.json").exists()  # cleared for clean re-run
+
+
+def test_missing_image_in_results_is_flagged(tmp_path):
+    cfg = _Cfg(); cfg.output_dir = str(tmp_path)
+    client = _fake_client([_payload("a.jpg", 0.9)])  # b.jpg dropped by API
+    writer = _RecordingWriter()
+    summary = BatchRunner().run(refs=[_ref("a.jpg"), _ref("b.jpg")],
+                                client=client, config=cfg, writers=[writer],
+                                context_lookup=ContextLookup({}),
+                                force=False, dry_run=False)
+    statuses = dict(writer.written)
+    assert statuses["a.jpg"] == "ok"
+    assert statuses["b.jpg"] == "error"
+    assert summary.total == 2 and summary.error == 1
+
+
+def test_bytes_loaded_once_per_image_with_classification(tmp_path):
+    from edu_image_tag.models import ImageRef
+    cfg = _Cfg(); cfg.output_dir = str(tmp_path); cfg.enable_classification = True
+    counts = {"n": 0}
+    def _counting_ref(image_id):
+        def load():
+            counts["n"] += 1
+            return b"bytes"
+        return ImageRef(id=image_id, uri="/x/" + image_id,
+                        mime_type="image/jpeg", load_bytes=load)
+    client = _fake_client([_payload("a.jpg", 0.9)])
+    client.classify.return_value = "artwork"
+    BatchRunner().run(refs=[_counting_ref("a.jpg")], client=client, config=cfg,
+                      writers=[_RecordingWriter()], context_lookup=ContextLookup({}),
+                      force=False, dry_run=False)
+    assert counts["n"] == 1  # loaded once, reused for classify + encode

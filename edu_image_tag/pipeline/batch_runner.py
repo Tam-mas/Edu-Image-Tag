@@ -27,13 +27,24 @@ class BatchRunner:
         state_path = out_dir / "batch_state.json"
         state = json.loads(state_path.read_text()) if state_path.exists() else {}
 
+        # Cache each image's bytes so load_bytes() fires exactly once per image
+        # regardless of whether classification is enabled. Note: dict.setdefault
+        # would evaluate load_bytes() every call (args are eval'd eagerly), so we
+        # gate on membership to guarantee a single disk read.
+        bytes_by_id: dict[str, bytes] = {}
+
+        def _img_bytes(ref) -> bytes:
+            if ref.id not in bytes_by_id:
+                bytes_by_id[ref.id] = ref.load_bytes()
+            return bytes_by_id[ref.id]
+
         # Optional inline classification to get image_type per image.
         types_by_id: dict[str, str | None] = {}
         for ref in refs:
             if config.enable_classification:
                 try:
                     types_by_id[ref.id] = client.classify(
-                        ref.load_bytes(), ref.mime_type, config.image_types)
+                        _img_bytes(ref), ref.mime_type, config.image_types)
                 except Exception:  # noqa: BLE001
                     types_by_id[ref.id] = None
             else:
@@ -43,7 +54,7 @@ class BatchRunner:
         requests = []
         for ref in refs:
             requests.append(build_describe_request(
-                image_b64=client.encode_image(ref.load_bytes()),
+                image_b64=client.encode_image(_img_bytes(ref)),
                 mime_type=ref.mime_type,
                 image_type=types_by_id[ref.id],
                 context_block=context_lookup.get(ref.id).as_prompt_block(),
@@ -82,6 +93,24 @@ class BatchRunner:
             for w in writers:
                 w.write(result)
             self._tally(summary, result.status)
+
+        # Never silently drop an image: emit an error result for any ref whose
+        # id did not appear in the batch output.
+        returned_ids = {item.get("metadata", {}).get("key") for item in results}
+        for ref in refs:
+            if ref.id not in returned_ids:
+                missing = ImageResult(
+                    image_id=ref.id, source_uri=ref.uri, image_type=None,
+                    short_alt_text=None, long_description=None, key_takeaways=[],
+                    confidence_score=None, status="error",
+                    review_reasons=["missing from batch response"],
+                    model={"classify": config.models.classify if config.enable_classification else None,
+                           "describe": config.models.describe},
+                    processed_at=_now(), error="image had no result in the batch output",
+                )
+                for w in writers:
+                    w.write(missing)
+                self._tally(summary, "error")
 
         for w in writers:
             w.finalize()
