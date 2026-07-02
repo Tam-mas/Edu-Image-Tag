@@ -1,0 +1,46 @@
+# ============================================================================
+# Edu-Image-Tag configuration
+# Copy this file to config.yaml and edit. Comment/uncomment lines to toggle.
+# The Gemini API key is NOT set here — export GEMINI_API_KEY in your shell.
+# ============================================================================
+
+# ── Models (swap names to trade cost vs accuracy) ─────────────────────────
+models:
+  classify: "gemini-3.1-flash-lite"      # cheap model for the type pass
+  describe: "gemini-3.1-pro-preview"     # high-fidelity model for descriptions
+
+# ── Pipeline ──────────────────────────────────────────────────────────────
+enable_classification: true              # false = single-stage (describe only)
+image_types:                             # the categories the classifier chooses from
+  - chart_graph
+  - scientific_diagram
+  - historical_photograph
+  - artwork
+  - dense_text_ocr
+confidence_threshold: 0.7                # results below this are flagged needs_review
+
+# ── Processing ────────────────────────────────────────────────────────────
+processing:
+  mode: sync                             # sync | batch
+  max_workers: 8                         # concurrent images (sync mode only)
+
+# ── Input (uncomment one) ─────────────────────────────────────────────────
+source:
+  type: local_folder
+  path: "./images"
+  # type: gcs                            # example custom source (user-provided)
+  # bucket: "my-bucket"
+
+# ── Context (optional) ────────────────────────────────────────────────────
+context_file: ""                         # path to CSV/JSON mapping id -> context, or empty
+
+# ── Output (enable the writers you want) ──────────────────────────────────
+outputs:
+  - json_sidecar
+  - manifest_csv
+  - review_jsonl                         # only needs_review/error results
+  # - jsonl
+  # - postgres                           # your own custom writer
+
+# ── Run behavior ──────────────────────────────────────────────────────────
+output_dir: "./output"
