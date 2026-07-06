@@ -22,7 +22,8 @@ edu-image-tag --config config.yaml
 
 Results land in `./output/`:
 - `<image>.json` — full result per image (sidecar)
-- `manifest.csv` — combined results (add `jsonl` to `outputs` for `manifest.jsonl`)
+- `manifest.csv` — combined results, keyed by `image_id` with a `content_hash`
+  column (add `jsonl` to `outputs` for `manifest.jsonl`)
 - `review.jsonl` — only the results flagged `needs_review` or `error`
 
 Use `--dry-run` to count images and estimate scope without calling the API, and
@@ -66,6 +67,42 @@ flowchart TD
   categories there without touching any code.
 - **Stage 2 (describe)** is where the alt text, long description, and key
   takeaways are generated, and where you'd customize the prompt (see below).
+
+## Image identity & pushing tags back
+
+At 20k+ images you need every image treated individually and every result
+mappable back to the right source record. Each result carries **two** identity
+fields (both in `manifest.csv` and every sidecar JSON):
+
+- **`content_hash`** — the full SHA-256 (hex) of the image's exact bytes. This is
+  the content fingerprint. For a corpus of unique images it's a clean 1-to-1 key
+  you can match against your own records.
+- **`image_id`** — the guaranteed-unique primary key used for resume, sidecar
+  filenames, and de-duplicating work. For the built-in local-folder source it is
+  `"<relative_path>#<first-8-of-hash>"`, e.g. `biology/ch4/fig1.jpg#a1b2c3d4` —
+  human-readable *and* collision-proof.
+
+How the two interact:
+
+- **Same file name in different folders** → already distinct (the id is the
+  relative path, not the bare name).
+- **The exact same image bytes in two places** → **separate records** (different
+  path ⇒ different `image_id`) that **share one `content_hash`**. So each
+  occurrence gets its own tags, and the shared hash still lets you *detect* true
+  duplicates if you want to.
+- **An image's bytes change but its path doesn't** → the hash (and thus
+  `image_id`) changes, so a re-run correctly reprocesses it.
+
+**Pushing tags back to your system:** match on `content_hash` when your images
+are unique, or on `image_id` when you need a guaranteed-unique key (it contains
+the hash). Both are emitted for every result, so use whichever your data
+supports.
+
+**Custom sources:** set `ImageRef.id` to *your* system's primary key (a DB id or
+asset UUID) so results map straight back. Set `ImageRef.content_hash` too if you
+already have it — otherwise the tool computes it from the bytes. Deriving both
+from stored metadata (rather than re-downloading each object just to hash it) is
+the right move for cloud sources.
 
 ## Configuration
 

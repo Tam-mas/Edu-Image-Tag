@@ -1,5 +1,12 @@
 # Changelog
 
+### [2026-07-06 20:29] Added
+
+**Tech:** `hashing.py`, `ImageRef`/`ImageResult.content_hash`, `LocalFolderSource` composite id, `process_image`/`BatchRunner` propagation, `manifest_csv` column — content-hash identity for every image
+**Dev:** Added `sha256_hex`/`short_hash` helpers. Every result now carries a full SHA-256 `content_hash` (the push-back fingerprint) plus an `image_id`; the local-folder source builds `image_id = "<relpath>#<first8-of-hash>"`. Identical bytes in different locations get the same `content_hash` but different `image_id`, so occurrences are tagged separately yet remain duplicate-detectable. The hash is taken from `ImageRef.content_hash` when a source supplies it, else computed once from the already-loaded bytes (no double read in the pipeline path). New `content_hash` CSV column; both fields land in the manifest and sidecars. 57 tests passing.
+**Plain:** Every image now gets a unique fingerprint and a unique id, so 20k+ images can be told apart and each result pushed back to exactly the right source record.
+**Why:** Two images could share a name and get confused, and there was no reliable key to match a generated description back to the original image — this makes each image individually addressable at scale.
+
 ### [2026-07-06 20:07] Added
 
 **Tech:** `README.md` — added a Mermaid two-stage pipeline diagram and a "Customizing the description prompt" section
