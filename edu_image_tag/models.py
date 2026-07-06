@@ -11,6 +11,7 @@ class ImageRef:
     uri: str
     mime_type: str
     load_bytes: Callable[[], bytes]
+    content_hash: Optional[str] = None
 
 
 @dataclass
@@ -39,6 +40,7 @@ class ImageResult:
     model: dict[str, Optional[str]]
     processed_at: str
     error: Optional[str] = None
+    content_hash: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)

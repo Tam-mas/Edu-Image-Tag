@@ -4,6 +4,7 @@ import mimetypes
 from pathlib import Path
 from typing import Iterator
 
+from edu_image_tag.hashing import sha256_hex, short_hash
 from edu_image_tag.models import ImageRef
 from edu_image_tag.registry import register_source
 from edu_image_tag.sources.base import InputSource
@@ -24,9 +25,11 @@ class LocalFolderSource(InputSource):
                 continue
             rel = p.relative_to(self.root).as_posix()
             mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+            full_hash = sha256_hex(p.read_bytes())
             yield ImageRef(
-                id=rel,
+                id=f"{rel}#{short_hash(full_hash)}",
                 uri=str(p),
                 mime_type=mime,
                 load_bytes=(lambda fp=p: fp.read_bytes()),
+                content_hash=full_hash,
             )

@@ -32,3 +32,19 @@ def test_imageresult_to_dict_roundtrip():
     assert d["status"] == "ok"
     assert d["key_takeaways"] == ["k1"]
     assert "error" in d and d["error"] is None
+
+
+def test_imageref_carries_optional_content_hash():
+    ref = ImageRef(id="a", uri="u", mime_type="image/jpeg",
+                   load_bytes=lambda: b"", content_hash="abc")
+    assert ref.content_hash == "abc"
+
+
+def test_imageresult_to_dict_includes_content_hash():
+    r = ImageResult(
+        image_id="a", source_uri="u", image_type=None, short_alt_text=None,
+        long_description=None, key_takeaways=[], confidence_score=None,
+        status="ok", review_reasons=[], model={}, processed_at="t",
+        content_hash="abc123",
+    )
+    assert r.to_dict()["content_hash"] == "abc123"
