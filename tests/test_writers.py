@@ -73,3 +73,14 @@ def test_manifest_csv_appends_without_duplicate_header(tmp_path):
     assert lines[0].startswith("image_id")
     assert sum(1 for l in lines if l.startswith("image_id")) == 1  # one header
     assert "a.jpg" in lines[1] and "b.jpg" in lines[2]
+
+
+def test_manifest_csv_includes_content_hash_column(tmp_path):
+    w = ManifestCsvWriter(output_dir=str(tmp_path))
+    r = _result("a.jpg")
+    r.content_hash = "abc123def"
+    w.write(r)
+    w.finalize()
+    text = (tmp_path / "manifest.csv").read_text()
+    assert "content_hash" in text.splitlines()[0]
+    assert "abc123def" in text

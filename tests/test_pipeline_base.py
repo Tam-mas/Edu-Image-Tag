@@ -64,3 +64,16 @@ def test_describe_exception_becomes_error_result():
     r = process_image(_ref(), client, _Cfg(), ImageContext(fields={}))
     assert r.status == "error"
     assert "api down" in r.error
+
+
+def test_content_hash_from_ref_is_carried_through():
+    ref = ImageRef(id="a.jpg", uri="/x/a.jpg", mime_type="image/jpeg",
+                   load_bytes=lambda: b"bytes", content_hash="deadbeef")
+    r = process_image(ref, _client(_desc(0.9)), _Cfg(), ImageContext(fields={}))
+    assert r.content_hash == "deadbeef"
+
+
+def test_content_hash_computed_when_ref_missing_it():
+    from edu_image_tag.hashing import sha256_hex
+    r = process_image(_ref(), _client(_desc(0.9)), _Cfg(), ImageContext(fields={}))
+    assert r.content_hash == sha256_hex(b"bytes")

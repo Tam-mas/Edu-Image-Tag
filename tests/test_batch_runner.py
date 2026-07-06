@@ -141,3 +141,19 @@ def test_force_clears_prior_batch_state(tmp_path):
                       writers=[_RecordingWriter()], context_lookup=ContextLookup({}),
                       force=True, dry_run=False)
     client.submit_batch.assert_called_once()  # ignored the saved job, resubmitted
+
+
+def test_batch_result_includes_content_hash(tmp_path):
+    from edu_image_tag.hashing import sha256_hex
+    cfg = _Cfg(); cfg.output_dir = str(tmp_path)
+    client = _fake_client([_payload("a.jpg", 0.9)])
+
+    class _CapWriter:
+        def __init__(self): self.results = []
+        def write(self, r): self.results.append(r)
+        def finalize(self): pass
+
+    w = _CapWriter()
+    BatchRunner().run(refs=[_ref("a.jpg")], client=client, config=cfg, writers=[w],
+                      context_lookup=ContextLookup({}), force=False, dry_run=False)
+    assert w.results[0].content_hash == sha256_hex(b"bytes")

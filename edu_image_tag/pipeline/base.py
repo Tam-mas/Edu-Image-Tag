@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from edu_image_tag.hashing import sha256_hex
 from edu_image_tag.models import ImageContext, ImageRef, ImageResult
 
 
@@ -12,8 +13,10 @@ def _now() -> str:
 def process_image(ref: ImageRef, client, config, context: ImageContext) -> ImageResult:
     """Run the full per-image pipeline. Never raises: failures become status=error."""
     models = {"classify": None, "describe": config.models.describe}
+    content_hash = ref.content_hash
     try:
         image_bytes = ref.load_bytes()
+        content_hash = ref.content_hash or sha256_hex(image_bytes)
         image_type = None
         if config.enable_classification:
             image_type = client.classify(image_bytes, ref.mime_type,
@@ -39,7 +42,7 @@ def process_image(ref: ImageRef, client, config, context: ImageContext) -> Image
             key_takeaways=list(desc.key_takeaways),
             confidence_score=desc.confidence_score,
             status=status, review_reasons=review_reasons,
-            model=models, processed_at=_now(),
+            model=models, processed_at=_now(), content_hash=content_hash,
         )
     except Exception as e:  # noqa: BLE001 - isolate per-image failures
         return ImageResult(
@@ -47,5 +50,5 @@ def process_image(ref: ImageRef, client, config, context: ImageContext) -> Image
             short_alt_text=None, long_description=None, key_takeaways=[],
             confidence_score=None, status="error",
             review_reasons=["processing error"], model=models,
-            processed_at=_now(), error=str(e),
+            processed_at=_now(), error=str(e), content_hash=content_hash,
         )

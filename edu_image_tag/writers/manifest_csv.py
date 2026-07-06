@@ -8,7 +8,7 @@ from edu_image_tag.registry import register_writer
 from edu_image_tag.writers.base import OutputWriter
 
 _COLUMNS = [
-    "image_id", "image_type", "status", "confidence_score",
+    "image_id", "content_hash", "image_type", "status", "confidence_score",
     "short_alt_text", "long_description", "key_takeaways",
     "review_reasons", "source_uri", "processed_at", "error",
 ]

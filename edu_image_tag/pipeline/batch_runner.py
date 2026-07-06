@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from edu_image_tag.gemini_client import DescriptionSchema, build_describe_request
+from edu_image_tag.hashing import sha256_hex
 from edu_image_tag.models import ImageResult
 from edu_image_tag.pipeline.base import _now
 from edu_image_tag.pipeline.sync_runner import RunSummary
@@ -41,6 +42,15 @@ class BatchRunner:
                 bytes_by_id[ref.id] = ref.load_bytes()
             return bytes_by_id[ref.id]
 
+        hash_by_id: dict[str, str] = {}
+
+        def _content_hash(ref) -> str:
+            if ref.id not in hash_by_id:
+                # Prefer a hash the source already computed; else derive from bytes
+                # (which are cached by _img_bytes, so no extra disk read).
+                hash_by_id[ref.id] = ref.content_hash or sha256_hex(_img_bytes(ref))
+            return hash_by_id[ref.id]
+
         # Optional inline classification to get image_type per image.
         types_by_id: dict[str, str | None] = {}
         for ref in refs:
@@ -65,6 +75,7 @@ class BatchRunner:
                 metadata_id=ref.id,
             ))
             requests[-1]["_sort"] = types_by_id[ref.id] or "zzz"
+            _content_hash(ref)  # populate hash_by_id[ref.id]
 
         # Submit (or resume an already-submitted job).
         job_name = state.get("describe_job")
@@ -92,7 +103,8 @@ class BatchRunner:
             image_id = item.get("metadata", {}).get("key")
             ref = refs_by_id.get(image_id)
             result = self._to_result(image_id, ref, item,
-                                     types_by_id.get(image_id), config)
+                                     types_by_id.get(image_id), config,
+                                     content_hash=hash_by_id.get(image_id))
             for w in writers:
                 w.write(result)
             self._tally(summary, result.status)
@@ -110,6 +122,7 @@ class BatchRunner:
                     model={"classify": config.models.classify if config.enable_classification else None,
                            "describe": config.models.describe},
                     processed_at=_now(), error="image had no result in the batch output",
+                    content_hash=hash_by_id.get(ref.id),
                 )
                 for w in writers:
                     w.write(missing)
@@ -123,7 +136,8 @@ class BatchRunner:
         state_path.unlink(missing_ok=True)
         return summary
 
-    def _to_result(self, image_id, ref, item, image_type, config) -> ImageResult:
+    def _to_result(self, image_id, ref, item, image_type, config,
+                   content_hash=None) -> ImageResult:
         source_uri = ref.uri if ref else (image_id or "")
         models = {
             "classify": config.models.classify if config.enable_classification else None,
@@ -146,6 +160,7 @@ class BatchRunner:
                 confidence_score=desc.confidence_score,
                 status="needs_review" if reasons else "ok",
                 review_reasons=reasons, model=models, processed_at=_now(),
+                content_hash=content_hash,
             )
         except Exception as e:  # noqa: BLE001 - malformed line -> needs_review
             return ImageResult(
@@ -153,7 +168,7 @@ class BatchRunner:
                 short_alt_text=None, long_description=None, key_takeaways=[],
                 confidence_score=None, status="needs_review",
                 review_reasons=["malformed batch response"], model=models,
-                processed_at=_now(), error=str(e))
+                processed_at=_now(), error=str(e), content_hash=content_hash)
 
     @staticmethod
     def _tally(summary: RunSummary, status: str) -> None:
